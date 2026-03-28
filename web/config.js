@@ -1,0 +1,1 @@
+window.SNAKE_LEADERBOARD_API_URL = "";

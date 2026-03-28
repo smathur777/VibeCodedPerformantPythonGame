@@ -100,6 +100,23 @@
         .leaderboard-header button {
             margin-top: 0;
         }
+
+        .name-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .name-row input {
+            padding: 8px 10px;
+            border: 1px solid #3f3f3f;
+            background: #111111;
+            color: #f5f5f5;
+            font: inherit;
+            min-width: 220px;
+        }
     </style>
 </head>
 <body>
@@ -107,6 +124,11 @@
         <p><a href="../">back</a></p>
         <h1>performant snake</h1>
         <div class="panel">
+            <div class="name-row">
+                <label for="player-name">username</label>
+                <input id="player-name" type="text" maxlength="16" placeholder="enter username">
+                <button id="save-name" type="button">save</button>
+            </div>
             <div class="hud">
                 <div id="score">score: 0</div>
                 <div id="message">arrow keys or wasd to move</div>
@@ -128,6 +150,7 @@
             <ol id="leaderboard"></ol>
         </div>
     </main>
+    <script src="./config.js"></script>
     <script src="./snake.js"></script>
 </body>
 </html>

@@ -17,8 +17,14 @@ const COLORS = {
 };
 
 const LEADERBOARD_KEY = "smathur777-snake-leaderboard";
+const PLAYER_NAME_KEY = "smathur777-snake-player-name";
 const LEADERBOARD_LIMIT = 10;
 const SWIPE_THRESHOLD = 24;
+const FALLBACK_LEADERBOARD_URL = "";
+const leaderboardApiUrl =
+  window.SNAKE_LEADERBOARD_API_URL && window.SNAKE_LEADERBOARD_API_URL.trim()
+    ? window.SNAKE_LEADERBOARD_API_URL.trim()
+    : FALLBACK_LEADERBOARD_URL;
 
 function normalizeLeaderboard(entries) {
   if (!Array.isArray(entries)) {
@@ -26,8 +32,15 @@ function normalizeLeaderboard(entries) {
   }
 
   return entries
-    .filter((entry) => Number.isFinite(entry?.score) && entry.score > 0)
+    .filter(
+      (entry) =>
+        typeof entry?.name === "string" &&
+        entry.name.trim() &&
+        Number.isFinite(entry?.score) &&
+        entry.score > 0,
+    )
     .map((entry) => ({
+      name: entry.name.trim().slice(0, 16),
       score: entry.score,
       time: typeof entry.time === "string" ? entry.time : new Date().toISOString(),
     }))
@@ -52,6 +65,10 @@ function saveLeaderboard(entries) {
   localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(entries));
 }
 
+function normalizeName(value) {
+  return value.trim().replace(/\s+/g, " ").slice(0, 16);
+}
+
 function formatTimestamp(value) {
   return new Date(value).toLocaleString([], {
     year: "numeric",
@@ -63,14 +80,17 @@ function formatTimestamp(value) {
 }
 
 class SnakeGame {
-  constructor(canvas, scoreNode, messageNode, leaderboardNode) {
+  constructor(canvas, scoreNode, messageNode, leaderboardNode, nameInput) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.scoreNode = scoreNode;
     this.messageNode = messageNode;
     this.leaderboardNode = leaderboardNode;
+    this.nameInput = nameInput;
     this.leaderboard = loadLeaderboard();
     saveLeaderboard(this.leaderboard);
+    this.playerName = localStorage.getItem(PLAYER_NAME_KEY) || "";
+    this.nameInput.value = this.playerName;
     this.touchStart = null;
 
     this.directionMap = {
@@ -96,7 +116,19 @@ class SnakeGame {
     this.canvas.addEventListener("touchstart", (event) => this.handleTouchStart(event), { passive: false });
     this.canvas.addEventListener("touchend", (event) => this.handleTouchEnd(event), { passive: false });
     this.renderLeaderboard();
+    this.refreshLeaderboard();
     this.reset();
+  }
+
+  setPlayerName(name) {
+    this.playerName = normalizeName(name);
+    this.nameInput.value = this.playerName;
+    localStorage.setItem(PLAYER_NAME_KEY, this.playerName);
+    this.updateHud(
+      this.playerName
+        ? `saved as ${this.playerName}`
+        : "enter a username to submit to the global leaderboard",
+    );
   }
 
   reset() {
@@ -116,7 +148,11 @@ class SnakeGame {
     this.gameOver = false;
     this.win = false;
     this.spawnFood();
-    this.updateHud("arrow keys, wasd, swipe, or tap the arrows");
+    this.updateHud(
+      this.playerName
+        ? `arrow keys, wasd, swipe, or tap the arrows | ${this.playerName}`
+        : "arrow keys, wasd, swipe, or tap the arrows | enter username for global leaderboard",
+    );
 
     this.lastTimestamp = 0;
     this.accumulator = 0;
@@ -155,18 +191,20 @@ class SnakeGame {
   }
 
   saveScore() {
-    if (this.score <= 0) {
+    if (!this.playerName || this.score <= 0) {
       return;
     }
 
     const entries = [...this.leaderboard];
     entries.push({
+      name: this.playerName,
       score: this.score,
       time: new Date().toISOString(),
     });
     this.leaderboard = normalizeLeaderboard(entries);
     saveLeaderboard(this.leaderboard);
     this.renderLeaderboard();
+    this.pushScore(this.playerName, this.score);
   }
 
   renderLeaderboard() {
@@ -181,7 +219,7 @@ class SnakeGame {
 
     this.leaderboard.forEach((entry, index) => {
       const item = document.createElement("li");
-      item.textContent = `#${index + 1} score ${entry.score} at ${formatTimestamp(entry.time)}`;
+      item.textContent = `#${index + 1} ${entry.name} - ${entry.score} at ${formatTimestamp(entry.time)}`;
       this.leaderboardNode.appendChild(item);
     });
   }
@@ -190,7 +228,56 @@ class SnakeGame {
     this.leaderboard = [];
     saveLeaderboard(this.leaderboard);
     this.renderLeaderboard();
-    this.updateHud("leaderboard cleared.");
+    this.updateHud(
+      leaderboardApiUrl
+        ? "local cache cleared. global leaderboard reloads from server."
+        : "leaderboard cleared.",
+    );
+    if (leaderboardApiUrl) {
+      this.refreshLeaderboard();
+    }
+  }
+
+  async refreshLeaderboard() {
+    if (!leaderboardApiUrl) {
+      return;
+    }
+
+    try {
+      const response = await fetch(leaderboardApiUrl, { cache: "no-store" });
+      if (!response.ok) {
+        return;
+      }
+      const payload = await response.json();
+      this.leaderboard = normalizeLeaderboard(payload.entries || []);
+      saveLeaderboard(this.leaderboard);
+      this.renderLeaderboard();
+    } catch (_error) {
+      // Keep local cached leaderboard if the worker is unavailable.
+    }
+  }
+
+  async pushScore(name, score) {
+    if (!leaderboardApiUrl) {
+      return;
+    }
+
+    try {
+      const response = await fetch(leaderboardApiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, score }),
+      });
+      if (!response.ok) {
+        return;
+      }
+      const payload = await response.json();
+      this.leaderboard = normalizeLeaderboard(payload.entries || []);
+      saveLeaderboard(this.leaderboard);
+      this.renderLeaderboard();
+    } catch (_error) {
+      // Local cache still shows the player's score if the worker call fails.
+    }
   }
 
   setDirection(proposed) {
@@ -299,7 +386,11 @@ class SnakeGame {
     if (hitWall || hitSelf) {
       this.gameOver = true;
       this.saveScore();
-      this.updateHud("game over. score saved for this attempt.");
+      this.updateHud(
+        this.playerName
+          ? "game over. score submitted to leaderboard."
+          : "game over. enter a username to submit to the leaderboard.",
+      );
       return;
     }
 
@@ -381,6 +472,8 @@ class SnakeGame {
 const canvas = document.getElementById("game");
 const scoreNode = document.getElementById("score");
 const messageNode = document.getElementById("message");
+const playerNameInput = document.getElementById("player-name");
+const saveNameButton = document.getElementById("save-name");
 const restartButton = document.getElementById("restart");
 const leaderboardNode = document.getElementById("leaderboard");
 const resetLeaderboardButton = document.getElementById("reset-leaderboard");
@@ -394,7 +487,15 @@ const game = new SnakeGame(
   scoreNode,
   messageNode,
   leaderboardNode,
+  playerNameInput,
 );
+saveNameButton.addEventListener("click", () => game.setPlayerName(playerNameInput.value));
+playerNameInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    game.setPlayerName(playerNameInput.value);
+    event.preventDefault();
+  }
+});
 restartButton.addEventListener("click", () => game.reset());
 resetLeaderboardButton.addEventListener("click", () => game.clearLeaderboard());
 upButton.addEventListener("click", () => game.setDirection([0, -1]));
