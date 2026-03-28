@@ -36,14 +36,6 @@
             flex-wrap: wrap;
         }
 
-        .controls {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-            margin-bottom: 12px;
-        }
-
         canvas {
             display: block;
             width: 100%;
@@ -64,14 +56,6 @@
             cursor: pointer;
         }
 
-        input {
-            padding: 8px 10px;
-            border: 1px solid #3f3f3f;
-            background: #111111;
-            color: #f5f5f5;
-            font: inherit;
-        }
-
         ol {
             margin: 14px 0 0;
             padding-left: 24px;
@@ -87,11 +71,6 @@
         <p><a href="../">back</a></p>
         <h1>performant snake</h1>
         <div class="panel">
-            <div class="controls">
-                <label for="player-name">name</label>
-                <input id="player-name" name="player-name" type="text" maxlength="16" placeholder="enter username">
-                <button id="save-name" type="button">save name</button>
-            </div>
             <div class="hud">
                 <div id="score">score: 0</div>
                 <div id="message">arrow keys or wasd to move</div>
