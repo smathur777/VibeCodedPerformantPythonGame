@@ -52,6 +52,16 @@ function saveLeaderboard(entries) {
   localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(entries));
 }
 
+function formatTimestamp(value) {
+  return new Date(value).toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 class SnakeGame {
   constructor(canvas, scoreNode, messageNode, leaderboardNode) {
     this.canvas = canvas;
@@ -171,9 +181,16 @@ class SnakeGame {
 
     this.leaderboard.forEach((entry, index) => {
       const item = document.createElement("li");
-      item.textContent = `#${index + 1} score ${entry.score} (${new Date(entry.time).toLocaleDateString()})`;
+      item.textContent = `#${index + 1} score ${entry.score} at ${formatTimestamp(entry.time)}`;
       this.leaderboardNode.appendChild(item);
     });
+  }
+
+  clearLeaderboard() {
+    this.leaderboard = [];
+    saveLeaderboard(this.leaderboard);
+    this.renderLeaderboard();
+    this.updateHud("leaderboard cleared.");
   }
 
   setDirection(proposed) {
@@ -366,6 +383,7 @@ const scoreNode = document.getElementById("score");
 const messageNode = document.getElementById("message");
 const restartButton = document.getElementById("restart");
 const leaderboardNode = document.getElementById("leaderboard");
+const resetLeaderboardButton = document.getElementById("reset-leaderboard");
 const upButton = document.getElementById("up");
 const downButton = document.getElementById("down");
 const leftButton = document.getElementById("left");
@@ -378,6 +396,7 @@ const game = new SnakeGame(
   leaderboardNode,
 );
 restartButton.addEventListener("click", () => game.reset());
+resetLeaderboardButton.addEventListener("click", () => game.clearLeaderboard());
 upButton.addEventListener("click", () => game.setDirection([0, -1]));
 downButton.addEventListener("click", () => game.setDirection([0, 1]));
 leftButton.addEventListener("click", () => game.setDirection([-1, 0]));
