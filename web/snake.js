@@ -16,12 +16,38 @@ const COLORS = {
   foodOutline: "#ffb5a7",
 };
 
+const LEADERBOARD_KEY = "smathur777-snake-leaderboard";
+const PLAYER_NAME_KEY = "smathur777-snake-player-name";
+const LEADERBOARD_LIMIT = 10;
+
+function loadLeaderboard() {
+  try {
+    const raw = localStorage.getItem(LEADERBOARD_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLeaderboard(entries) {
+  localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(entries));
+}
+
+function normalizeName(value) {
+  return value.trim().replace(/\s+/g, " ").slice(0, 16);
+}
+
 class SnakeGame {
-  constructor(canvas, scoreNode, messageNode) {
+  constructor(canvas, scoreNode, messageNode, leaderboardNode, nameInput) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.scoreNode = scoreNode;
     this.messageNode = messageNode;
+    this.leaderboardNode = leaderboardNode;
+    this.nameInput = nameInput;
+    this.playerName = localStorage.getItem(PLAYER_NAME_KEY) || "";
+    this.leaderboard = loadLeaderboard();
+    this.nameInput.value = this.playerName;
 
     this.directionMap = {
       ArrowUp: [0, -1],
@@ -43,7 +69,19 @@ class SnakeGame {
     this.animationFrame = null;
 
     window.addEventListener("keydown", (event) => this.handleKeydown(event));
+    this.renderLeaderboard();
     this.reset();
+  }
+
+  setPlayerName(name) {
+    this.playerName = normalizeName(name);
+    this.nameInput.value = this.playerName;
+    localStorage.setItem(PLAYER_NAME_KEY, this.playerName);
+    this.updateHud(
+      this.playerName
+        ? `playing as ${this.playerName}`
+        : "enter a name to save leaderboard scores",
+    );
   }
 
   reset() {
@@ -63,7 +101,11 @@ class SnakeGame {
     this.gameOver = false;
     this.win = false;
     this.spawnFood();
-    this.updateHud("arrow keys or wasd to move");
+    this.updateHud(
+      this.playerName
+        ? `arrow keys or wasd to move | player: ${this.playerName}`
+        : "arrow keys or wasd to move | enter a name to save scores",
+    );
 
     this.lastTimestamp = 0;
     this.accumulator = 0;
@@ -99,6 +141,44 @@ class SnakeGame {
   updateHud(message) {
     this.scoreNode.textContent = `score: ${this.score}`;
     this.messageNode.textContent = message;
+  }
+
+  saveScore() {
+    if (!this.playerName || this.score <= 0) {
+      return;
+    }
+
+    const entries = [...this.leaderboard];
+    entries.push({
+      name: this.playerName,
+      score: this.score,
+      time: new Date().toISOString(),
+    });
+    entries.sort(
+      (a, b) =>
+        b.score - a.score ||
+        new Date(b.time).getTime() - new Date(a.time).getTime(),
+    );
+    this.leaderboard = entries.slice(0, LEADERBOARD_LIMIT);
+    saveLeaderboard(this.leaderboard);
+    this.renderLeaderboard();
+  }
+
+  renderLeaderboard() {
+    this.leaderboardNode.innerHTML = "";
+
+    if (this.leaderboard.length === 0) {
+      const item = document.createElement("li");
+      item.textContent = "no scores yet.";
+      this.leaderboardNode.appendChild(item);
+      return;
+    }
+
+    this.leaderboard.forEach((entry) => {
+      const item = document.createElement("li");
+      item.textContent = `${entry.name} - ${entry.score} (${new Date(entry.time).toLocaleDateString()})`;
+      this.leaderboardNode.appendChild(item);
+    });
   }
 
   handleKeydown(event) {
@@ -168,7 +248,12 @@ class SnakeGame {
 
     if (hitWall || hitSelf) {
       this.gameOver = true;
-      this.updateHud("game over. press restart to try again.");
+      this.saveScore();
+      this.updateHud(
+        this.playerName
+          ? "game over. score saved if it made the board."
+          : "game over. enter a name if you want your scores saved.",
+      );
       return;
     }
 
@@ -251,6 +336,22 @@ const canvas = document.getElementById("game");
 const scoreNode = document.getElementById("score");
 const messageNode = document.getElementById("message");
 const restartButton = document.getElementById("restart");
+const leaderboardNode = document.getElementById("leaderboard");
+const playerNameInput = document.getElementById("player-name");
+const saveNameButton = document.getElementById("save-name");
 
-const game = new SnakeGame(canvas, scoreNode, messageNode);
+const game = new SnakeGame(
+  canvas,
+  scoreNode,
+  messageNode,
+  leaderboardNode,
+  playerNameInput,
+);
 restartButton.addEventListener("click", () => game.reset());
+saveNameButton.addEventListener("click", () => game.setPlayerName(playerNameInput.value));
+playerNameInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    game.setPlayerName(playerNameInput.value);
+    event.preventDefault();
+  }
+});
