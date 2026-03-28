@@ -44,6 +44,7 @@
             border: 1px solid #3f3f3f;
             background: #101820;
             image-rendering: pixelated;
+            touch-action: none;
         }
 
         button {
@@ -64,6 +65,24 @@
         li {
             margin: 6px 0;
         }
+
+        .mobile-controls {
+            display: grid;
+            grid-template-columns: repeat(3, 64px);
+            gap: 8px;
+            width: max-content;
+            margin-top: 14px;
+        }
+
+        .mobile-controls button {
+            margin-top: 0;
+            min-height: 48px;
+            font-size: 20px;
+        }
+
+        .spacer {
+            visibility: hidden;
+        }
     </style>
 </head>
 <body>
@@ -77,7 +96,15 @@
             </div>
             <canvas id="game" width="600" height="400" aria-label="Snake game"></canvas>
             <button id="restart" type="button">restart</button>
-            <h2>leaderboard (per attempt)</h2>
+            <div class="mobile-controls" aria-label="mobile controls">
+                <div class="spacer"></div>
+                <button id="up" type="button" aria-label="move up">↑</button>
+                <div class="spacer"></div>
+                <button id="left" type="button" aria-label="move left">←</button>
+                <button id="down" type="button" aria-label="move down">↓</button>
+                <button id="right" type="button" aria-label="move right">→</button>
+            </div>
+            <h2>leaderboard</h2>
             <ol id="leaderboard"></ol>
         </div>
     </main>

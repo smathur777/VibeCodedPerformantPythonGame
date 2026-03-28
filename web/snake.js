@@ -18,11 +18,31 @@ const COLORS = {
 
 const LEADERBOARD_KEY = "smathur777-snake-leaderboard";
 const LEADERBOARD_LIMIT = 10;
+const SWIPE_THRESHOLD = 24;
+
+function normalizeLeaderboard(entries) {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+
+  return entries
+    .filter((entry) => Number.isFinite(entry?.score) && entry.score > 0)
+    .map((entry) => ({
+      score: entry.score,
+      time: typeof entry.time === "string" ? entry.time : new Date().toISOString(),
+    }))
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        new Date(b.time).getTime() - new Date(a.time).getTime(),
+    )
+    .slice(0, LEADERBOARD_LIMIT);
+}
 
 function loadLeaderboard() {
   try {
     const raw = localStorage.getItem(LEADERBOARD_KEY);
-    return raw ? JSON.parse(raw) : [];
+    return normalizeLeaderboard(raw ? JSON.parse(raw) : []);
   } catch {
     return [];
   }
@@ -40,6 +60,8 @@ class SnakeGame {
     this.messageNode = messageNode;
     this.leaderboardNode = leaderboardNode;
     this.leaderboard = loadLeaderboard();
+    saveLeaderboard(this.leaderboard);
+    this.touchStart = null;
 
     this.directionMap = {
       ArrowUp: [0, -1],
@@ -61,6 +83,8 @@ class SnakeGame {
     this.animationFrame = null;
 
     window.addEventListener("keydown", (event) => this.handleKeydown(event));
+    this.canvas.addEventListener("touchstart", (event) => this.handleTouchStart(event), { passive: false });
+    this.canvas.addEventListener("touchend", (event) => this.handleTouchEnd(event), { passive: false });
     this.renderLeaderboard();
     this.reset();
   }
@@ -82,7 +106,7 @@ class SnakeGame {
     this.gameOver = false;
     this.win = false;
     this.spawnFood();
-    this.updateHud("arrow keys or wasd to move");
+    this.updateHud("arrow keys, wasd, swipe, or tap the arrows");
 
     this.lastTimestamp = 0;
     this.accumulator = 0;
@@ -130,12 +154,7 @@ class SnakeGame {
       score: this.score,
       time: new Date().toISOString(),
     });
-    entries.sort(
-      (a, b) =>
-        b.score - a.score ||
-        new Date(b.time).getTime() - new Date(a.time).getTime(),
-    );
-    this.leaderboard = entries.slice(0, LEADERBOARD_LIMIT);
+    this.leaderboard = normalizeLeaderboard(entries);
     saveLeaderboard(this.leaderboard);
     this.renderLeaderboard();
   }
@@ -150,11 +169,22 @@ class SnakeGame {
       return;
     }
 
-    this.leaderboard.forEach((entry) => {
+    this.leaderboard.forEach((entry, index) => {
       const item = document.createElement("li");
-      item.textContent = `attempt ${entry.score} (${new Date(entry.time).toLocaleDateString()})`;
+      item.textContent = `#${index + 1} score ${entry.score} (${new Date(entry.time).toLocaleDateString()})`;
       this.leaderboardNode.appendChild(item);
     });
+  }
+
+  setDirection(proposed) {
+    if (
+      proposed[0] === -this.direction[0] &&
+      proposed[1] === -this.direction[1]
+    ) {
+      return;
+    }
+
+    this.nextDirection = proposed;
   }
 
   handleKeydown(event) {
@@ -171,14 +201,41 @@ class SnakeGame {
       return;
     }
 
-    if (
-      proposed[0] === -this.direction[0] &&
-      proposed[1] === -this.direction[1]
-    ) {
+    this.setDirection(proposed);
+    event.preventDefault();
+  }
+
+  handleTouchStart(event) {
+    if (event.changedTouches.length === 0) {
       return;
     }
 
-    this.nextDirection = proposed;
+    const touch = event.changedTouches[0];
+    this.touchStart = { x: touch.clientX, y: touch.clientY };
+    event.preventDefault();
+  }
+
+  handleTouchEnd(event) {
+    if (!this.touchStart || event.changedTouches.length === 0) {
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - this.touchStart.x;
+    const dy = touch.clientY - this.touchStart.y;
+    this.touchStart = null;
+
+    if (Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) {
+      event.preventDefault();
+      return;
+    }
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      this.setDirection(dx > 0 ? [1, 0] : [-1, 0]);
+    } else {
+      this.setDirection(dy > 0 ? [0, 1] : [0, -1]);
+    }
+
     event.preventDefault();
   }
 
@@ -309,6 +366,10 @@ const scoreNode = document.getElementById("score");
 const messageNode = document.getElementById("message");
 const restartButton = document.getElementById("restart");
 const leaderboardNode = document.getElementById("leaderboard");
+const upButton = document.getElementById("up");
+const downButton = document.getElementById("down");
+const leftButton = document.getElementById("left");
+const rightButton = document.getElementById("right");
 
 const game = new SnakeGame(
   canvas,
@@ -317,3 +378,7 @@ const game = new SnakeGame(
   leaderboardNode,
 );
 restartButton.addEventListener("click", () => game.reset());
+upButton.addEventListener("click", () => game.setDirection([0, -1]));
+downButton.addEventListener("click", () => game.setDirection([0, 1]));
+leftButton.addEventListener("click", () => game.setDirection([-1, 0]));
+rightButton.addEventListener("click", () => game.setDirection([1, 0]));
